@@ -1,0 +1,36 @@
+
+
+============================== 2023-04-20 05:09:48.335274 | 0d3da49e-fcb7-461d-9449-ac286e09134a ==============================
+[0m05:09:48.335274 [info ] [MainThread]: Running with dbt=1.4.5
+[0m05:09:48.341212 [debug] [MainThread]: running dbt with arguments {'write_json': True, 'use_colors': True, 'printer_width': 80, 'version_check': True, 'partial_parse': True, 'static_parser': True, 'profiles_dir': 'C:\\Users\\vaibhav_patil8\\.dbt', 'send_anonymous_usage_stats': True, 'quiet': False, 'no_print': False, 'cache_selected_only': False, 'skip_profile_setup': False, 'which': 'init', 'indirect_selection': 'eager'}
+[0m05:09:48.341212 [debug] [MainThread]: Tracking: tracking
+[0m05:09:48.415416 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'start', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001E522645990>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001E522635050>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001E522998C10>]}
+[0m05:10:04.423288 [debug] [MainThread]: Starter project path: C:\Users\vaibhav_patil8\AppData\Local\Programs\Python\Python311\Lib\site-packages\dbt\include\starter_project
+[0m05:10:38.842781 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'end', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001E522658550>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001E522659590>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001E522659650>]}
+[0m05:10:38.846651 [debug] [MainThread]: Flushing usage events
+[0m05:10:39.944345 [debug] [MainThread]: Error sending anonymous usage statistics. Disabling tracking for this execution. If you wish to permanently disable tracking, see: https://docs.getdbt.com/reference/global-configs#send-anonymous-usage-stats.
+[0m05:10:39.945866 [error] [MainThread]: Encountered an error:
+
+[0m05:10:39.949836 [error] [MainThread]: Traceback (most recent call last):
+  File "C:\Users\vaibhav_patil8\AppData\Local\Programs\Python\Python311\Lib\site-packages\dbt\main.py", line 136, in main
+    results, succeeded = handle_and_check(args)
+                         ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vaibhav_patil8\AppData\Local\Programs\Python\Python311\Lib\site-packages\dbt\main.py", line 206, in handle_and_check
+    task, res = run_from_args(parsed)
+                ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vaibhav_patil8\AppData\Local\Programs\Python\Python311\Lib\site-packages\dbt\main.py", line 253, in run_from_args
+    results = task.run()
+              ^^^^^^^^^^
+  File "C:\Users\vaibhav_patil8\AppData\Local\Programs\Python\Python311\Lib\site-packages\dbt\task\init.py", line 304, in run
+    adapter = self.ask_for_adapter_choice()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vaibhav_patil8\AppData\Local\Programs\Python\Python311\Lib\site-packages\dbt\task\init.py", line 230, in ask_for_adapter_choice
+    numeric_choice = click.prompt(prompt_msg, type=click.INT)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vaibhav_patil8\AppData\Local\Programs\Python\Python311\Lib\site-packages\click\termui.py", line 166, in prompt
+    value = prompt_func(prompt)
+            ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vaibhav_patil8\AppData\Local\Programs\Python\Python311\Lib\site-packages\click\termui.py", line 149, in prompt_func
+    raise Abort() from None
+click.exceptions.Abort
+
