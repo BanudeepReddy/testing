@@ -1,0 +1,16 @@
+version: 2
+
+sources:
+  - name: sakila
+    database: sakila
+    schema: sakila
+    tables:
+      - name: film
+      - name: film_text
+      - name: table1
+      - name: table2
+  - name : sample_db
+    database: sample_db
+    schema: sample_db
+    tables:
+      - name: table2
