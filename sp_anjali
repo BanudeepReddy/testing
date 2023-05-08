@@ -1,0 +1,372 @@
+  
+-- ***************************************************************************  
+-- Stored Procedure Name:     sp_CompetitorPricingLessOutliers  
+-- Author:       John Kim  
+-- Date:        03/29/2010  
+-- Description:    
+--                          
+-- Parameters:   
+--      
+-- Return Values:    
+--      
+-- Used by:  
+-- ***************************************************************************  
+CREATE PROCEDURE [dbo].[sp_CompetitorPricingLessOutliers]  
+AS  
+     SET NOCOUNT ON;  
+  
+     -- Run the below code snippet to repopulate the PSCompetitorDistanceMatrix table   
+     DROP TABLE dbo.tmpMatrix;  
+     SELECT DISTINCT   
+            psp.WebChampSiteID AS PSWebChampSiteID,   
+            c.MasterAddressID,   
+            CAST(dbo.CalcDistance(psp.Latitude, psp.Longitude, c.Latitude, c.Longitude) AS DECIMAL(5, 2)) AS Distance  
+     -- dbo.CalcDrivingDistance(psp.Latitude, psp.Longitude, c.Latitude, c.Longitude) as Distance  
+     INTO dbo.tmpMatrix  
+     FROM PSPropertyCoordinates psp  
+          CROSS JOIN dbo.MasterAddress c  
+     WHERE dbo.CalcDistance(psp.Latitude, psp.Longitude, c.Latitude, c.Longitude) BETWEEN 0 AND 5  
+          AND c.latitude IS NOT NULL  
+          AND c.longitude IS NOT NULL  
+          AND c.latitude != 0  
+          AND c.longitude != 0  
+          AND c.IsValidAddress = 1  
+          AND c.Latitude BETWEEN psp.Latitude - .05 AND psp.Latitude + .05  
+          AND c.Longitude BETWEEN psp.Longitude - .06 AND psp.Longitude + .06;  
+     DELETE FROM dbo.tmpMatrix  
+     WHERE MasterAddressID IN  
+     (  
+         SELECT DISTINCT   
+                ma.MasterAddressID  
+         FROM dbo.MasterAddress ma  
+              JOIN dbo.Competitor c ON c.MasterAddressID = ma.MasterAddressID  
+         WHERE c.Source = 'publicstorage'  
+     );  
+     TRUNCATE TABLE dbo.PSCompetitorDistanceMatrix;  
+     INSERT INTO dbo.PSCompetitorDistanceMatrix  
+     (PSWebChampSiteID,   
+      MasterAddressID,   
+      Distance  
+     )  
+            SELECT DISTINCT   
+                   PSWebChampSiteID,   
+                   MasterAddressID,   
+                   CAST(Distance AS DECIMAL(5, 2))  
+            FROM dbo.tmpMatrix  
+            WHERE distance BETWEEN 0 AND 5;  
+  
+     --Map Yardi to Masteraddress  
+     INSERT INTO dbo.MasterAddressYardiMap  
+            SELECT DISTINCT   
+                   MasteraddressID,   
+                   CAST(NULL AS INT) AS YardiCompetitorID  
+            FROM dbo.MasterAddress ma  
+            WHERE NOT EXISTS  
+            (  
+                SELECT 1  
+                FROM dbo.MasterAddressYardiMap m  
+                WHERE m.MasteraddressID = ma.MasterAddressID  
+            );  
+     UPDATE dbo.MasterAddressYardiMap  
+       SET   
+           YardiCompetitorID = y.YardiCompetitorID  
+     FROM [dbo].[YardiCompetitor] y  
+          JOIN dbo.MasterAddress ma ON ma.Address = y.Address  
+                                       AND LEFT(ma.Zipcode, 5) = LEFT(y.Zipcode, 5)  
+          JOIN dbo.MasterAddressYardiMap may ON may.MasterAddressID = ma.MasterAddressID  
+     WHERE may.YardiCompetitorID IS NULL  
+           AND y.PropertyStatus = 'Completed';  
+     UPDATE dbo.MasterAddressYardiMap  
+       SET   
+           YardiCompetitorID = y.YardiCompetitorID  
+     FROM [dbo].[YardiCompetitor] y  
+          JOIN dbo.MasterAddress ma ON LEFT(ma.Address, 7) = LEFT(y.Address, 7)  
+                                       AND LEFT(ma.Zipcode, 5) = LEFT(y.Zipcode, 5)  
+          JOIN dbo.MasterAddressYardiMap may ON may.MasterAddressID = ma.MasterAddressID  
+     WHERE may.YardiCompetitorID IS NULL  
+           AND y.PropertyStatus = 'Completed';  
+     UPDATE dbo.MasterAddressYardiMap  
+       SET   
+           YardiCompetitorID = y.YardiCompetitorID  
+     FROM [dbo].[YardiCompetitor] y  
+          JOIN dbo.MasterAddress ma ON LEFT(ma.Address, 6) = LEFT(y.Address, 6)  
+                                       AND LEFT(ma.Zipcode, 5) = LEFT(y.Zipcode, 5)  
+          JOIN dbo.MasterAddressYardiMap may ON may.MasterAddressID = ma.MasterAddressID  
+     WHERE may.YardiCompetitorID IS NULL  
+           AND y.PropertyStatus = 'Completed';  
+     UPDATE dbo.MasterAddressYardiMap  
+       SET   
+           YardiCompetitorID = y.YardiCompetitorID  
+     FROM [dbo].[YardiCompetitor] y  
+          JOIN dbo.MasterAddress ma ON LEFT(ma.Address, 5) = LEFT(y.Address, 5)  
+                                       AND LEFT(ma.Zipcode, 5) = LEFT(y.Zipcode, 5)  
+          JOIN dbo.MasterAddressYardiMap may ON may.MasterAddressID = ma.MasterAddressID  
+     WHERE may.YardiCompetitorID IS NULL  
+           AND y.PropertyStatus = 'Completed';  
+     WITH ErrorFix  
+          AS (SELECT DISTINCT   
+                     may.MasterAddressID,   
+                     y.YardiCompetitorID,  
+      ROUND([dbo].[CalcDistance](ma.Latitude, ma.Longitude, y.Latitude, y.Longitude), 4) as Distance  
+              FROM [dbo].[YardiCompetitor] y  
+                   JOIN dbo.MasterAddress ma ON LEFT(ma.Address, 4) = LEFT(y.Address, 4)  
+                                                AND LEFT(ma.Zipcode, 5) = LEFT(y.Zipcode, 5)  
+                   JOIN dbo.MasterAddressYardiMap may ON may.MasterAddressID = ma.MasterAddressID  
+              WHERE may.YardiCompetitorID IS NULL  
+                    AND y.PropertyStatus = 'Completed'  
+                    AND ROUND([dbo].[CalcDistance](ma.Latitude, ma.Longitude, y.Latitude, y.Longitude), 4) <= 1.01  
+                   AND ma.Latitude BETWEEN y.Latitude - .05 AND y.Latitude + .05  
+                   AND ma.Longitude BETWEEN y.Longitude - .07 AND y.Longitude + .07)  
+          UPDATE dbo.MasterAddressYardiMap  
+            SET   
+                YardiCompetitorID = e.YardiCompetitorID  
+          FROM dbo.MasterAddressYardiMap may  
+               JOIN ErrorFix e ON e.MasterAddressID = may.MasterAddressID;  
+  
+     -- End code snippet  
+     --20101109 abautista: Truncate temp tables  
+     --   -- Removed un-needed cursors "curPricedate" and "curProductid"  
+     --   -- Removed un-needed temp tables "#tmp_Property_Map" and "#tmp3" since MarketName can be easily added to #tmp  
+     --   -- Similarly, removed un-needed temp tables "#tmp_Property_Mapv" and "#tmpv3" since MarketName can be easily added to #tmpv  
+  
+     IF EXISTS  
+     (  
+         SELECT *  
+         FROM dbo.sysobjects  
+         WHERE ID = OBJECT_ID(N'[dbo].[Tmp_Comp_Price_Load]')  
+               AND OBJECTPROPERTY(id, N'IsUserTable') = 1  
+     )  
+         TRUNCATE TABLE dbo.Tmp_Comp_Price_Load;  
+     IF EXISTS  
+     (  
+         SELECT *  
+         FROM dbo.sysobjects  
+         WHERE ID = OBJECT_ID(N'[dbo].[Tmp_Comp_Price_Hold]')  
+               AND OBJECTPROPERTY(id, N'IsUserTable') = 1  
+     )  
+         TRUNCATE TABLE dbo.Tmp_Comp_Price_Hold;  
+     IF EXISTS  
+     (  
+         SELECT *  
+         FROM dbo.sysobjects  
+         WHERE ID = OBJECT_ID(N'[dbo].[Tmp_Comp_Price_Final]')  
+               AND OBJECTPROPERTY(id, N'IsUserTable') = 1  
+     )  
+         TRUNCATE TABLE dbo.Tmp_Comp_Price_Final;  
+     DECLARE @LastPricedate DATETIME;  
+     SELECT @LastPricedate = MAX(pricedate)  
+     FROM CompetitionIntelligence.dbo.CompetitorPriceSiteProductDistanceLessOutliers;  
+  
+  
+     INSERT INTO dbo.Tmp_Comp_Price_Load        --------------------------------------------------------------------------------------
+            SELECT DISTINCT   
+                   cp.pricedate,   
+                   cp.competitorpricingid,   
+                   cua.psproductid,   
+                   prod.Name,   
+                   cp.price,   
+                   p.WebChampSiteID AS SiteID,   
+                   p.MarketName,   
+                   NULL AS Stdev_Price,   
+                   NULL AS Avg_Price,   
+                   NULL AS Max_Price,   
+                   NULL AS Min_Price,   
+                   NULL AS Counts,   
+                   NULL AS Counts_Less_Outliers,   
+                   NULL AS Num_of_Observations,   
+                   psdm.Distance,   
+                   cp.WebOnlyPrice  
+            FROM CompetitionIntelligence.dbo.competitorpricing cp  
+                 INNER JOIN CompetitionIntelligence.dbo.competitor c ON cp.competitorid = c.competitorid  
+ INNER JOIN CompetitionIntelligence.dbo.competitorunitattribute cua ON cp.competitorunitattributeid = cua.competitorunitattributeid  
+                 INNER JOIN CompetitionIntelligence.dbo.PSCompetitorDistanceMatrix psdm ON c.MasterAddressID = psdm.MasterAddressID  
+                 INNER JOIN Pricing_ProductionWC2.dbo.dim_PSProperty p ON p.WebChampSiteID = psdm.PSWebChampSiteID--PSSJSQL001.psdatawh  
+                 INNER JOIN US_Reporting.dbo.Product prod ON prod.ProductID = cua.psProductID  
+            WHERE cua.psproductid IN(1, 2, 3, 4, 5, 6, 7, 8) --  = @Product  
+                 AND Isnull(cp.price,0) > 0  
+                 AND cua.sqft <= 350  
+                 AND psdm.Distance <= 5  
+                 AND cp.pricedate > @LastPricedate -- = @Pricedate  
+                 AND p.IsPropertyActive = 1  
+                 AND p.PropertyTypeCode = 'MI'  
+                 AND p.WebChampSiteID > 0  
+                 AND c.Company != 'Public Storage'  
+                 --  or c.Company is null)  
+                 --and c.Company is null  
+                 AND DATEPART(hh, cp.PriceDate) = 0 --remove ExtraSpaceTest  
+            ORDER BY cp.price DESC;  
+     DELETE l    -------------------------TBD------------------------------------------------
+     FROM dbo.Tmp_Comp_Price_Load l  
+          INNER JOIN dbo.competitorpricing cp ON cp.competitorpricingid = l.competitorpricingid  
+          INNER JOIN dbo.Competitor c ON c.CompetitorID = cp.CompetitorID  
+     WHERE c.Company = 'Public Storage'  
+           AND c.Source <> 'publicstorage';  
+  
+																										------------------------------------------------------------------
+     ---Temptables for DeterminingOutliers  
+     IF OBJECT_ID('tempdb.dbo.#tmp') IS NOT NULL  
+         DROP TABLE #tmp;  
+     SELECT Pricedate,   
+            MarketName,   
+            SiteID,   
+            psproductid,   
+            STDEV(Price) AS stdev_Price,   
+            AVG(Price) AS avg_Price,    
+            COUNT(DISTINCT Price) AS records  
+     INTO #tmp  
+     FROM dbo.Tmp_Comp_Price_Load c  
+     GROUP BY Pricedate,   
+              MarketName,   
+              SiteID,   
+              PSProductID;  
+  
+  
+  
+     IF OBJECT_ID('tempdb.dbo.#tmp_StatTable') IS NOT NULL  
+         DROP TABLE #tmp_StatTable;  
+     SELECT t.Pricedate,   
+            t.SiteID,   
+            t.PSProductID,   
+            t.stdev_Price,   
+            t.avg_Price,   
+            t.Records AS Recordsadj,  
+   t.Avg_Price + (2*Isnull(t.stdev_Price,0)) as MaxPrice,  
+   t.Avg_Price-(2*Isnull(t.stdev_Price,0)) as MinPrice          
+     INTO #tmp_StatTable  
+     FROM #tmp t  
+  
+  
+     ---Updates  
+  
+     INSERT INTO dbo.`  
+            SELECT c.Pricedate,   
+                   c.competitorpricingid,   
+                   c.psproductid,   
+                   c.Name,   
+                   c.price,   
+                   c.SiteID,   
+                   c.MarketName,  
+                   CASE  
+                       WHEN t.stdev_Price > 200  
+                       THEN t.stdev_Price  
+                       ELSE t.stdev_Price  
+                   END AS Stdev_Price,   
+                   t.avg_Price AS Avg_Price,   
+                   MaxPrice,  
+                   MinPrice,   
+                   1 AS Counts,  
+                   CASE  
+        When c.price > t.MaxPrice --and c.Price/t.avg_Price -1  > 0.5   
+        then 0  
+        When c.price < t.MinPrice --and c.price/t.avg_Price-1 < -0.6   
+        then 0  
+                       ELSE 1  
+                   END AS Counts_Less_Outliers,   
+                   Recordsadj AS Num_of_Observations,   
+                   c.Distance,   
+                   c.WebOnlyPrice  
+            FROM dbo.tmp_Comp_Price_Load c  
+                 JOIN dbo.CompetitorPricing cp ON cp.CompetitorPricingID = c.competitorpricingid  
+                 JOIN dbo.Competitor comp ON comp.CompetitorID = cp.CompetitorID  
+                 INNER JOIN #tmp_StatTable t ON c.SiteID = t.SiteID  
+                                                AND c.PSProductID = t.PSProductID  
+                                                AND c.Pricedate = t.Pricedate  
+            ORDER BY c.Pricedate ASC,   
+                     c.SiteID ASC,   
+                     c.PsProductID ASC;  
+     TRUNCATE TABLE dbo.tmp_Comp_Price_Load;  
+     DELETE FROM dbo.Tmp_Comp_Price_Hold  
+     WHERE Counts_Less_Outliers = 0;  
+     WITH updateNum_of_Observations  
+          AS (SELECT COUNT(DISTINCT Price) AS Num_of_Observations,   
+                     SiteID,   
+                     PSProductID,   
+                     Pricedate  
+              FROM dbo.Tmp_Comp_Price_Hold  
+              GROUP BY SiteID,   
+                       PSProductID,   
+                       PriceDate)  
+          UPDATE t  
+            SET   
+                Num_of_Observations = u.Num_of_Observations  
+          FROM updateNum_of_Observations u  
+               JOIN dbo.Tmp_Comp_Price_Hold t ON t.PriceDate = u.PriceDate  
+                                                 AND t.psproductid = u.psproductID  
+                                                 AND t.pricedate = u.pricedate;  
+  --------------------------------------------------TBD----------------------------------------------------
+     --Delete Extra Records  
+     DECLARE @Distance DECIMAL(5, 1);  
+     DECLARE curDistance CURSOR  
+     FOR SELECT DISTINCT   
+                ROUND(Distance, 1)  
+         FROM dbo.Tmp_Comp_Price_Hold  
+         WHERE ROUND(Distance, 1) > 3.0  
+         ORDER BY ROUND(Distance, 1) DESC;  
+     OPEN curdistance;  
+     FETCH NEXT FROM curdistance INTO @Distance;  
+     WHILE @@FETCH_STATUS = 0  
+         BEGIN  
+             DELETE dbo.Tmp_Comp_Price_Hold  
+             WHERE Distance >= @Distance  
+                   AND Num_of_Observations > 10;  
+             UPDATE dbo.Tmp_Comp_Price_Hold  
+               SET   
+                   Num_of_Observations = t.Records  
+             FROM  
+             (  
+                 SELECT SiteID,   
+                        psproductid,   
+                        Pricedate,   
+                        COUNT(DISTINCT Price) AS records  
+                 FROM dbo.Tmp_Comp_Price_Hold  
+                 GROUP BY SiteID,   
+                          PSProductID,   
+                          Pricedate  
+             ) t  
+             INNER JOIN dbo.Tmp_Comp_Price_Hold c ON c.SiteID = t.SiteID  
+                                                     AND c.psproductid = t.psproductid  
+                                                     AND c.Pricedate = t.Pricedate;  
+             FETCH NEXT FROM curdistance INTO @Distance;  
+         END;  
+     CLOSE curdistance;  
+     DEALLOCATE curdistance;  
+  ---------------------------------------------*****************-------------------------------------------------------
+  
+     UPDATE dbo.Tmp_Comp_Price_Hold  
+       SET   
+           Counts_Less_Outliers = 0  
+     WHERE Counts_Less_Outliers = 1  
+           AND price > 500  
+           AND Num_of_Observations = 1;  
+     Insert into dbo.Tmp_Comp_Price_Final  
+  Select  
+  *  
+  From dbo.Tmp_Comp_Price_Hold  
+  
+     INSERT INTO dbo.CompetitorPriceSiteProductDistanceLessOutliers  
+            SELECT Pricedate,   
+                   competitorpricingid,   
+                   psproductid,   
+                   price,   
+                   SiteID,   
+                   Counts_Less_Outliers,   
+                   Distance,   
+                   WebOnlyPrice,   
+                   NULL AS AdminFee,   
+                   NULL AS CompetitorID  
+            FROM dbo.Tmp_Comp_Price_Final  
+            WHERE Counts_Less_Outliers = 1;  
+     TRUNCATE TABLE dbo.Tmp_Comp_Price_Hold;  
+     TRUNCATE TABLE dbo.Tmp_Comp_Price_Final;  
+     UPDATE dbo.CompetitorPriceSiteProductDistanceLessOutliers  
+       SET   
+           AdminFee = cp.AdminFee,   
+           CompetitorID = cp.CompetitorID  
+     FROM dbo.CompetitorPricing cp  
+          INNER JOIN dbo.CompetitorPriceSiteProductDistanceLessOutliers c ON c.competitorpricingid = cp.competitorpricingid  
+     WHERE c.AdminFee IS NULL  
+           AND c.Pricedate > @LastPricedate  
+           AND c.PSProductID IN(1, 2, 3, 4, 5, 6, 7, 8);  
+  
+  
+     SET NOCOUNT OFF;
